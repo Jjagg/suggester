@@ -52,8 +52,9 @@ void main() {
   // {arm, rma, man, ani, ni., i.k, .kl, kle, lei, ein, in3, n3@, 3@v, @ve, ved, eda, da., a.i, .io}
 
   // Once you decide on a TermMapping construct a Suggester and add suggestions:
-  final suggesterAlphaOrNumeric = Suggester(AlphaOrNumeric())..addAll(entries);
-  final suggesterTrigram = Suggester(Ngrams(3))..addAll(entries);
+  final suggesterAlphaOrNumeric = Suggester<String>(AlphaOrNumeric())
+    ..addAll(entries);
+  final suggesterTrigram = Suggester<String>(Ngrams(3))..addAll(entries);
 
   // Find all suggestions featuring search term 'wen', note the difference between tokenisers.
   print(suggesterAlphaOrNumeric.suggest('wen').map((e) => e.entry.value));
@@ -153,14 +154,14 @@ void main() {
   // ...]
 
   // Suggester is serialisable so suggestions and approval history are easily store
-  final json = suggesterAlphaOrNumeric.toJson();
+  final json = suggesterAlphaOrNumeric.toJson((s) => s);
 
-  final rehydrated = Suggester.fromJson(AlphaOrNumeric(), json);
+  //final rehydrated = Suggester.fromJson(AlphaOrNumeric(), json);
 
   // ... and rehydrated later
-  if (SuggesterEquality().equals(rehydrated, suggesterAlphaOrNumeric)) {
-    print('Rehydrated successfully!');
-  }
+  //if (SuggesterEquality().equals(rehydrated, suggesterAlphaOrNumeric)) {
+  //  print('Rehydrated successfully!');
+  //}
 
   // Rehydrated successfully!
 }

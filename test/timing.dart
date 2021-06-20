@@ -13,7 +13,7 @@ void main(List<String> args) {
     suggester.addAll(emails);
 
     for (final email in emails) {
-      suggester.add(String.fromCharCodes(email.codeUnits.reversed));
+      suggester.add(email, String.fromCharCodes(email.codeUnits.reversed));
     }
   }
   timer.stop();

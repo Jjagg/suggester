@@ -150,29 +150,29 @@ class SuggesterEquality implements Equality<Suggester> {
 
 /// Iterate over search result ordering of [Suggestion] instances.
 /// The underlying [Suggester] can change between calls to [iterator].
-class _SuggestionIterable extends IterableBase<Suggestion> {
+class _SuggestionIterable<T> extends IterableBase<Suggestion<T>> {
   _SuggestionIterable._(this.suggester, this.searchTerms, this.maxEditDistance);
 
   /// The [Suggester] being iterated
-  final Suggester suggester;
+  final Suggester<T> suggester;
 
   final int maxEditDistance;
 
   final Iterable<String> searchTerms;
 
   @override
-  Iterator<Suggestion> get iterator =>
+  Iterator<Suggestion<T>> get iterator =>
       searchTerms.isEmpty || suggester.entries.isEmpty
-          ? Iterable<Suggestion>.empty().iterator
-          : _SugggestionIterator._(this);
+          ? Iterable<Suggestion<T>>.empty().iterator
+          : _SuggestionIterator<T>._(this);
 }
 
 /// Iterator for [Suggestion] instances
 /// Returns suggestions grouped by edit distance
-class _SugggestionIterator implements Iterator<Suggestion> {
-  _SugggestionIterator._(this.ownerIterable)
+class _SuggestionIterator<T> implements Iterator<Suggestion<T>> {
+  _SuggestionIterator._(this.ownerIterable)
       : validVersion = ownerIterable.suggester._version,
-        currentItr = Iterable<Suggestion>.empty().iterator,
+        currentItr = Iterable<Suggestion<T>>.empty().iterator,
         // Set up prefix matching for search terms
         termEntriesItrs = {
           for (final searchTerm in ownerIterable.searchTerms)
@@ -187,23 +187,23 @@ class _SugggestionIterator implements Iterator<Suggestion> {
   final int validVersion;
 
   /// The [Suggester] being iterated
-  final _SuggestionIterable ownerIterable;
+  final _SuggestionIterable<T> ownerIterable;
 
   /// Keep track of prefix searching for each search term
-  final Map<String, TTIterator<_EntryTermIdx>> termEntriesItrs;
+  final Map<String, TTIterator<_EntryTermIdx<T>>> termEntriesItrs;
 
   /// Keep track of last known termIdx sequence for each entry to allow identification
   /// of shared sequential runs of search terms in entries.
   /// Shared sequences between search terms and entries increases similarity.
   final Map<Entry, _TermIdxSequence> entryTermIdxSequence;
 
-  Iterator<Suggestion> currentItr;
+  Iterator<Suggestion<T>> currentItr;
 
   /// Set to -1 so that first increment is 0
   int termEditDistance = -1;
 
   @override
-  Suggestion get current => currentItr.current;
+  Suggestion<T> get current => currentItr.current;
 
   @override
   bool moveNext() {
@@ -227,7 +227,7 @@ class _SugggestionIterator implements Iterator<Suggestion> {
     }
 
     // set up for next set of edit distance results
-    final entryWeights = HashMap<Entry, double>();
+    final entryWeights = HashMap<Entry<T>, double>();
 
     var searchTermIdx = 0;
     for (final searchTerm in ownerIterable.searchTerms) {
@@ -241,7 +241,7 @@ class _SugggestionIterator implements Iterator<Suggestion> {
       // in this case 'detol'.
       // Suggestions from terms with a lower edit distance are prioritised
       // over those with a higher edit distance.
-      final uniqueTermEntries = <Entry, _TermDistanceEntry>{};
+      final uniqueTermEntries = <Entry<T>, _TermDistanceEntry<T>>{};
 
       // The previous call advances to the first element of the next edit distance
       // so need to consume this first before calling moveNext this time round.
@@ -333,7 +333,7 @@ class _SugggestionIterator implements Iterator<Suggestion> {
       });
 
     currentItr = sorted
-        .map((final mapEntry) => Suggestion._(
+        .map((final mapEntry) => Suggestion<T>._(
             entry: mapEntry.key,
             score: mapEntry.value,
             searchTerms: ownerIterable.searchTerms,
@@ -352,17 +352,18 @@ class _SugggestionIterator implements Iterator<Suggestion> {
 }
 
 /// Represents a single match result
-class Suggestion {
+class Suggestion<T> {
   /// Construct a [Suggestion].
-  Suggestion._(
-      {required this.entry,
-      required this.score,
-      required this.searchTerms,
-      required this.caseSensitive,
-      required this.prefixEditDistance});
+  Suggestion._({
+    required this.entry,
+    required this.score,
+    required this.searchTerms,
+    required this.caseSensitive,
+    required this.prefixEditDistance,
+  });
 
   /// Construct from existing entry
-  Suggestion._fromEntry(Entry entry, bool caseSensitive)
+  Suggestion._fromEntry(Entry<T> entry, bool caseSensitive)
       : this._(
             entry: entry,
             score: 0,
@@ -371,7 +372,7 @@ class Suggestion {
             prefixEditDistance: 0);
 
   /// [Entry] referenced by this [Suggestion].
-  final Entry entry;
+  final Entry<T> entry;
 
   /// Recommendation score for this suggestion
   final double score;
@@ -387,7 +388,7 @@ class Suggestion {
 
   /// Split [entry] by first occurance of each term in [searchTerms].
   /// [mapTerm] and [mapNonTerm] may return any object including string.
-  Iterable<T> mapTermsAndNonTerms<T>(
+  Iterable<T> mapTermsAndNonTerms(
       T Function(String term) mapTerm, T Function(String nonTerm) mapNonTerm) {
     if (searchTerms.isEmpty) {
       return [mapNonTerm(entry.value)];
@@ -474,11 +475,12 @@ class Suggestion {
 }
 
 /// Represents a single value to be returned as a suggestion.
-class Entry {
+class Entry<T> {
   /// Construct a new [Entry]
   /// Throws exception if [value] is null or empty.
-  Entry._(String value, {int? secondaryValue})
-      : value = value,
+  Entry._(T item, String value, {int? secondaryValue})
+      : item = item,
+        value = value,
         _subScore = secondaryValue ?? 0 {
     if (value.isEmpty) {
       throw ArgumentError('value is empty');
@@ -487,9 +489,11 @@ class Entry {
 
   /// Construct a new [Entry] from json representing values
   /// to be shared between all instances of [Entry] with same value.
-  Entry._fromJson(dynamic json)
-      : this._(json[_JSONKEY_ENTRY_VALUE] as String,
-            secondaryValue: json[_JSONKEY_ENTRY_SECONDARY] as int);
+  //Entry._fromJson(dynamic json)
+  //    : this._(json[_JSONKEY_ENTRY_VALUE] as String,
+  //          secondaryValue: json[_JSONKEY_ENTRY_SECONDARY] as int);
+
+  final T item;
 
   /// The original suggestion string supplied by client.
   final String value;
@@ -520,12 +524,13 @@ class Entry {
   String toString() => '{value: $value, subScore: $_subScore}';
 
   /// Return json representation of entry
-  dynamic _toJson() => [value, subScore];
+  dynamic _toJson(dynamic Function(T) itemToJson) =>
+      [itemToJson(item), value, subScore];
 }
 
 /// A relation between a [Entry] and a term index.
 @immutable
-class _EntryTermIdx {
+class _EntryTermIdx<T> {
   _EntryTermIdx(this.entry, this.termIdx)
       : assert(!identical(termIdx, null)),
         assert(!identical(entry, null));
@@ -533,7 +538,7 @@ class _EntryTermIdx {
   /// Term index for [Entry]
   final int termIdx;
 
-  final Entry entry;
+  final Entry<T> entry;
 
   /// Two [_EntryTermIdx] instances are equal if they point to
   /// same [Entry].
@@ -549,11 +554,13 @@ class _EntryTermIdx {
 }
 
 @immutable
-class _TermDistanceEntry {
-  _TermDistanceEntry(this.termDistance, this.entryTermIdx);
+class _TermDistanceEntry<T> {
+  _TermDistanceEntry(this.termDistance, this.entryTermIdx)
+      : assert(!identical(termDistance, null)),
+        assert(!identical(entryTermIdx, null));
 
   final int termDistance;
-  final _EntryTermIdx entryTermIdx;
+  final _EntryTermIdx<T> entryTermIdx;
 }
 
 /// Keep track of term index sequences shared between search sentance and entry
@@ -583,17 +590,17 @@ class _TermIdxSequence {
 /// as returned by [TermMapping] such that <i>f(x)</i> = term at index x.
 ///
 /// Then tp is given by <i>g</i> : <i>K</i> &#8594; &#8469; | g(x) = 1/<i>f<sup>-1</sup>(x)</i>
-class Suggester {
+class Suggester<T> {
   Suggester._(
-      this.termMapping,
-      this.caseSensitive,
-      this.unicode,
-      this.termIdfWeighting,
-      this.termProximalityWeighting,
-      this.sharedSequenceLengthWeighting,
-      this._entries,
-      Iterable<Entry>? initEntries)
-      : _ttMultiMap = TTMultiMapSet<_EntryTermIdx>(),
+    this.termMapping,
+    this.caseSensitive,
+    this.unicode,
+    this.termIdfWeighting,
+    this.termProximalityWeighting,
+    this.sharedSequenceLengthWeighting,
+    this._entries,
+    Iterable<Entry<T>>? initEntries,
+  )   : _ttMultiMap = TTMultiMapSet<_EntryTermIdx<T>>(),
         entries = UnmodifiableMapView(_entries),
         _version = 0 {
     if (!identical(initEntries, null)) {
@@ -604,40 +611,41 @@ class Suggester {
   }
 
   /// Construct a new [Suggester]
-  Suggester(TermMapping termMapping,
-      {bool caseSensitive = false,
-      bool unicode = true,
-      double termIdfWeighting = 1,
-      double termProximalityWeighting = 1,
-      double sharedSequenceLengthWeighting = 1})
-      : this._(
+  Suggester(
+    TermMapping termMapping, {
+    bool caseSensitive = false,
+    bool unicode = true,
+    double termIdfWeighting = 1,
+    double termProximalityWeighting = 1,
+    double sharedSequenceLengthWeighting = 1,
+  }) : this._(
             termMapping,
             caseSensitive,
             unicode,
             termIdfWeighting,
             termProximalityWeighting,
             sharedSequenceLengthWeighting,
-            <String, Entry>{},
+            <String, Entry<T>>{},
             null);
 
   /// Construct a new [Suggester] from [json].
-  Suggester.fromJson(TermMapping termMapping, dynamic json,
-      {bool unicode = true,
-      double termIdfWeighting = 1,
-      double termProximalityWeighting = 1,
-      double sharedSequenceLengthWeighting = 1})
-      : this._(
-            termMapping.runtimeType.toString() == json[_JSONKEY_TERMMAPPING]
-                ? termMapping
-                : throw ArgumentError.value(json,
-                    'Expected termMapping:${termMapping.runtimeType.toString()}, got termMapping:${json[_JSONKEY_TERMMAPPING]}'),
-            json[_JSONKEY_CASESENSITIVE] as bool,
-            unicode,
-            termIdfWeighting,
-            termProximalityWeighting,
-            sharedSequenceLengthWeighting,
-            <String, Entry>{},
-            (json[_JSONKEY_ENTRIES] as List).map((e) => Entry._fromJson(e)));
+  //Suggester.fromJson(TermMapping termMapping, dynamic json,
+  //    {bool unicode = true,
+  //    double termIdfWeighting = 1,
+  //    double termProximalityWeighting = 1,
+  //    double sharedSequenceLengthWeighting = 1,})
+  //    : this._(
+  //          termMapping.runtimeType.toString() == json[_JSONKEY_TERMMAPPING]
+  //              ? termMapping
+  //              : throw ArgumentError.value(json,
+  //                  'Expected termMapping:${termMapping.runtimeType.toString()}, got termMapping:${json[_JSONKEY_TERMMAPPING]}'),
+  //          json[_JSONKEY_CASESENSITIVE] as bool,
+  //          unicode,
+  //          termIdfWeighting,
+  //          termProximalityWeighting,
+  //          sharedSequenceLengthWeighting,
+  //          <String, Entry<T>>{},
+  //          (json[_JSONKEY_ENTRIES] as List).map((e) => Entry<T>._fromJson(e)));
 
   /// Specify case sensitivity of [termMapping].
   final bool caseSensitive;
@@ -666,13 +674,13 @@ class Suggester {
   final TermMapping termMapping;
 
   /// Store prefix searchable relation from term to entry
-  final TTMultiMapSet<_EntryTermIdx> _ttMultiMap;
+  final TTMultiMapSet<_EntryTermIdx<T>> _ttMultiMap;
 
   /// Unmodifiable view of current entries
-  final UnmodifiableMapView<String, Entry> entries;
+  final UnmodifiableMapView<String, Entry<T>> entries;
 
   /// All current entries
-  final Map<String, Entry> _entries;
+  final Map<String, Entry<T>> _entries;
 
   /// Track version tofor detection of iterator concurrent modification
   int _version;
@@ -689,7 +697,7 @@ class Suggester {
   /// then it is not added and return value is false.
   ///
   /// If [entry] is successfully added then return value is true.
-  bool _addEntry(Entry entry) {
+  bool _addEntry(Entry<T> entry) {
     // Transform term into list of distinct keys and map them to term
     final terms = mapTerms(entry.value);
 
@@ -741,10 +749,10 @@ class Suggester {
   /// then it is not added and return value is false.
   ///
   /// If [entryValue] is successfully added or already exists then return value is true.
-  bool add(String entryValue, {int? subScore}) {
+  bool add(T item, String entryValue, {int? subScore}) {
     final entry = _entries[entryValue];
     if (identical(entry, null)) {
-      return _addEntry(Entry._(entryValue, secondaryValue: subScore));
+      return _addEntry(Entry._(item, entryValue, secondaryValue: subScore));
     }
     // we already know this suggestion so just update its secondary value
     if (!identical(subScore, null)) {
@@ -756,10 +764,10 @@ class Suggester {
   /// Equivilent to [add] for all [entries].
   ///
   /// Throws [ArgumentError] if [add] fails for an entry.
-  void addAll(Iterable<String> entries) => entries.forEach((final suggestion) {
-        if (!add(suggestion)) {
-          throw ArgumentError.value(
-              suggestion, 'entries', 'Failed to add entry');
+  void addAll(Iterable<T> items, [String Function(T)? stringify]) =>
+      items.forEach((item) {
+        if (!add(item, stringify == null ? item.toString() : stringify(item))) {
+          throw ArgumentError.value(item, 'items', 'Failed to add entry');
         }
       });
 
@@ -768,7 +776,7 @@ class Suggester {
   /// If [fallBackToSearchString] is true then [entry] is returned as single
   /// token if [termMapping] generates no tokens
   Iterable<String> mapTerms(String entry,
-      {bool fallBackToSearchString = false}) {
+      {bool fallBackToSearchString = false,}) {
     entry = entry.trim();
     if (entry.isEmpty) {
       return Iterable<String>.empty();
@@ -804,8 +812,10 @@ class Suggester {
   /// [Suggester.termMapping] is applied to [searchString] prior to search.
   ///
   /// see: [suggestFromTerms] for details of operation.
-  Iterable<Suggestion> suggest(String searchString,
-          {int maxEditDistance = 0}) =>
+  Iterable<Suggestion<T>> suggest(
+    String searchString, {
+    int maxEditDistance = 0,
+  }) =>
       suggestFromTerms(mapTerms(searchString, fallBackToSearchString: true),
           maxEditDistance: maxEditDistance);
 
@@ -824,8 +834,10 @@ class Suggester {
   ///
   /// The resulting [Iterable] will throw [ConcurrentModificationError] if underlying
   /// [Suggester] changes during iteration. Change between seperate iterations is permitted.
-  Iterable<Suggestion> suggestFromTerms(Iterable<String> searchTerms,
-      {int maxEditDistance = 0}) {
+  Iterable<Suggestion<T>> suggestFromTerms(
+    Iterable<String> searchTerms, {
+    int maxEditDistance = 0,
+  }) {
     if (maxEditDistance < 0) {
       throw ArgumentError.value(maxEditDistance, 'maxEditDistance < 0');
     }
@@ -836,7 +848,7 @@ class Suggester {
   /// Create suggestion directly from [entryValue].
   ///
   /// Throw [ArgumentError] if [entryValue] does not exist in this suggester.
-  Suggestion createSuggestion(String entryValue) {
+  Suggestion<T> createSuggestion(String entryValue) {
     final entry = _entries[entryValue];
     if (identical(entry, null)) {
       throw ArgumentError.value(
@@ -846,9 +858,11 @@ class Suggester {
   }
 
   /// Return json encodable object representing this [Suggester]
-  Map<String, dynamic> toJson() => <String, dynamic>{
+  Map<String, dynamic> toJson(dynamic Function(T) itemToJson) =>
+      <String, dynamic>{
         _JSONKEY_TERMMAPPING: termMapping.runtimeType.toString(),
         _JSONKEY_CASESENSITIVE: caseSensitive,
-        _JSONKEY_ENTRIES: _entries.values.map((e) => e._toJson()).toList()
+        _JSONKEY_ENTRIES:
+            _entries.values.map((e) => e._toJson(itemToJson)).toList()
       };
 }
